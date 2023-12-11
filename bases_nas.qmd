@@ -1,0 +1,296 @@
+---
+title: "Bases NA's"
+author: "João Miguel Anacleto"
+format: docx
+editor: visual
+output:
+  pdf_document:
+    keep_tex: true
+---
+
+## Bibliotecas:
+
+```{r, include=FALSE}
+
+library(readxl)
+library(tidyverse)
+library(stringr)
+library(stringi)
+library(readstata13)
+library(lubridate)
+library(foreign)
+library(gt)
+library(reshape2) 
+library(janitor)
+library(dplyr)
+library(ggplot2)
+```
+
+## Path dos arquivos:
+
+When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+
+```{r, include=FALSE}
+## Arquivos JM
+
+path <- "~/programacao/Vital Strategies/R/roteiro_analise/datasets"
+load(paste0(path,"/base_linkada_anon_all_years_14sep2023.Rdata"))
+load(paste0(path,"/sih_anon.Rdata"))
+load(paste0(path,"/sesap_anom.Rdata"))
+load(paste0(path,"/sim_raw_anonimizado.Rdata"))
+load(paste0(path,"/sinan_raw_anonimizado.Rdata"))
+load(paste0(path,"/icd_map_res.Rdata"))
+```
+
+## Função:
+
+```{r, include=FALSE}
+
+# Função para criar a tabela bonita
+tabela_bonita <- function(df, titulo){ # cols_label  - aprender a usar
+  df%>%
+    gt() %>%
+    tab_style(
+      style = list(
+        cell_text(
+          align = "center",
+          weight = 'bold',
+        )
+      ),
+      locations = list(
+        cells_title(groups = c("title"))
+      )) %>%
+    tab_header(title = titulo)
+}
+
+
+## Como usar:
+#tab_ano_sinan <- tabela_bonita( tab_ano_sinan, "Número de notificações segundo faixa etária e raça/cor. Rio Grande do Norte, 2010 a 2022")
+#tab_ano_sinan
+```
+
+## Tabelas:
+
+```{r, include=FALSE}
+##SIH
+
+check_missing_sih <- function(sih_anon) {
+  # Criação de dataframe expondo valores vazios por coluna - em linha
+  missing_value_df <- data.frame(
+    column_name = names(sih_anon),
+    percent_missing = round(colSums(is.na(sih_anon)) * 100 / nrow(sih_anon), 2),
+    count_missing = colSums(is.na(sih_anon))
+  )
+  # Retorna apenas colunas com % de vazios maiores que 0%
+  missing_value_df <- missing_value_df[missing_value_df$percent_missing > 0, ]
+  missing_value_df <- missing_value_df[order(-missing_value_df$percent_missing), ]
+  # Redefine o índice
+  rownames(missing_value_df) <- NULL
+  return(missing_value_df)
+}
+
+valores_na_sih <- check_missing_sih(sih_anon)
+```
+
+```{r, include=FALSE}
+###############################SINAN
+check_missing_sinan <- function(sinan_anon) {
+  # Criação de dataframe expondo valores vazios por coluna - em linha
+  missing_value_df <- data.frame(
+    column_name = names(sinan_anon),
+    percent_missing = round(colSums(is.na(sinan_anon)) * 100 / nrow(sinan_anon), 2),
+    count_missing = colSums(is.na(sinan_anon))
+  )
+  # Retorna apenas colunas com % de vazios maiores que 0%
+  missing_value_df <- missing_value_df[missing_value_df$percent_missing > 0, ]
+  missing_value_df <- missing_value_df[order(-missing_value_df$percent_missing), ]
+  # Redefine o índice
+  rownames(missing_value_df) <- NULL
+  return(missing_value_df)
+}
+
+valores_na_SINAN <- check_missing_sinan(sinan_anon)
+```
+
+```{r, include=FALSE}
+###############################SIM
+check_missing_sim <- function(sim_anon) {
+  # Criação de dataframe expondo valores vazios por coluna - em linha
+  missing_value_df <- data.frame(
+    column_name = names(sim_anon),
+    percent_missing = round(colSums(is.na(sim_anon)) * 100 / nrow(sim_anon), 2),
+    count_missing = colSums(is.na(sim_anon))
+  )
+  # Retorna apenas colunas com % de vazios maiores que 0%
+  missing_value_df <- missing_value_df[missing_value_df$percent_missing > 0, ]
+  missing_value_df <- missing_value_df[order(-missing_value_df$percent_missing), ]
+  # Redefine o índice
+  rownames(missing_value_df) <- NULL
+  return(missing_value_df)
+}
+
+valores_na_SIM <- check_missing_sim(sim_anon)
+```
+
+```{r, include=FALSE}
+###############################SESAP
+check_missing_sesap <- function(sesap_anom) {
+  # Criação de dataframe expondo valores vazios por coluna - em linha
+  missing_value_df <- data.frame(
+    column_name = names(sesap_anom),
+    percent_missing = round(colSums(is.na(sesap_anom)) * 100 / nrow(sesap_anom), 2),
+    count_missing = colSums(is.na(sesap_anom))
+  )
+  # Retorna apenas colunas com % de vazios maiores que 0%
+  missing_value_df <- missing_value_df[missing_value_df$percent_missing > 0, ]
+  missing_value_df <- missing_value_df[order(-missing_value_df$percent_missing), ]
+  # Redefine o índice
+  rownames(missing_value_df) <- NULL
+  return(missing_value_df)
+}
+
+valores_na_SESAP <- check_missing_sesap(sesap_anom)
+```
+
+```{r, include=FALSE}
+################################SESAP_OB
+##Desacoplando SESAP de SESAP_OB
+# Função para verificar valores ausentes e separar por banco
+check_missing_and_filter_banco <- function(sesap_anom) {
+  # Criação de dataframe expondo valores vazios por coluna - em linha
+  missing_value_df <- data.frame(
+    column_name = names(sesap_anom),
+    percent_missing = round(colSums(is.na(sesap_anom)) * 100 / nrow(sesap_anom), 2),
+    count_missing = colSums(is.na(sesap_anom))
+  )
+  # Retorna apenas colunas com % de vazios maiores que 0%
+  missing_value_df <- missing_value_df[missing_value_df$percent_missing > 0, ]
+  missing_value_df <- missing_value_df[order(-missing_value_df$percent_missing), ]
+  # Redefine o índice
+  rownames(missing_value_df) <- NULL
+  
+  # Separação dos dados por banco
+  sesap_ob <- sesap_anom[sesap_anom$banco == "SESAP_OB", ]
+  sesap <- sesap_anom[sesap_anom$banco == "SESAP", ]
+  
+  # Retorna a lista com os dois DataFrames
+  return(list(missing_values = missing_value_df, SESAP_OB = sesap_ob, SESAP = sesap))
+}
+
+# Chamando a função com o DataFrame SESAP
+resultados <- check_missing_and_filter_banco(sesap_anom)
+resultados
+
+# Acesse os resultados
+missing_values <- resultados$missing_values
+sesap_ob_data <- resultados$SESAP_OB
+sesap_data <- resultados$SESAP
+############################################################################################################
+
+check_missing_sesap <- function(sesap_ob_data) {
+  # Criação de dataframe expondo valores vazios por coluna - em linha
+  missing_value_df <- data.frame(
+    column_name = names(sesap_ob_data),
+    percent_missing = round(colSums(is.na(sesap_ob_data)) * 100 / nrow(sesap_ob_data), 2),
+    count_missing = colSums(is.na(sesap_ob_data))
+  )
+  # Retorna apenas colunas com % de vazios maiores que 0%
+  missing_value_df <- missing_value_df[missing_value_df$percent_missing > 0, ]
+  missing_value_df <- missing_value_df[order(-missing_value_df$percent_missing), ]
+  # Redefine o índice
+  rownames(missing_value_df) <- NULL
+  return(missing_value_df)
+}
+
+valores_na_SESAPOB <- check_missing_sesap(sesap_ob_data)
+valores_na_SESAPOB
+```
+
+## Renomeando tabelas:
+
+```{r, include=FALSE}
+# Renomear a coluna column_name para "Coluna" SIH
+colnames(valores_na_sih)[colnames(valores_na_sih) == "column_name"] <- "Coluna"
+colnames(valores_na_sih)[colnames(valores_na_sih) == "percent_missing"] <- "% NA"
+colnames(valores_na_sih)[colnames(valores_na_sih) == "count_missing"] <- "Contagem_NA"
+```
+
+```{r, include=FALSE}
+# Renomear a coluna column_name para "Coluna" SINAN
+colnames(valores_na_SINAN)[colnames(valores_na_SINAN) == "column_name"] <- "Coluna"
+colnames(valores_na_SINAN)[colnames(valores_na_SINAN) == "percent_missing"] <- "% NA"
+colnames(valores_na_SINAN)[colnames(valores_na_SINAN) == "count_missing"] <- "Contagem_NA"
+```
+
+```{r, include=FALSE}
+# Renomear a coluna column_name para "Coluna" SIM
+colnames(valores_na_SIM)[colnames(valores_na_SIM) == "column_name"] <- "Coluna"
+colnames(valores_na_SIM)[colnames(valores_na_SIM) == "percent_missing"] <- "% NA"
+colnames(valores_na_SIM)[colnames(valores_na_SIM) == "count_missing"] <- "Contagem_NA"
+```
+
+```{r, include=FALSE}
+# Renomear a coluna column_name para "Coluna" SESAP
+colnames(valores_na_SESAP)[colnames(valores_na_SESAP) == "column_name"] <- "Coluna"
+colnames(valores_na_SESAP)[colnames(valores_na_SESAP) == "percent_missing"] <- "% NA"
+colnames(valores_na_SESAP)[colnames(valores_na_SESAP) == "count_missing"] <- "Contagem_NA"
+```
+
+```{r, include=FALSE}
+# Renomear a coluna column_name para "Coluna" SESAP
+colnames(valores_na_SESAPOB)[colnames(valores_na_SESAPOB) == "column_name"] <- "Coluna"
+colnames(valores_na_SESAPOB)[colnames(valores_na_SESAPOB) == "percent_missing"] <- "% NA"
+colnames(valores_na_SESAPOB)[colnames(valores_na_SESAPOB) == "count_missing"] <-"Contagem_NA"
+```
+
+## Gerando tabelas:
+
+```{r, include=FALSE}
+valores_na_sih <- tabela_bonita( valores_na_sih, "Número de Na's na base SIH")
+```
+
+`r valores_na_sih`
+
+```{r, include=FALSE}
+valores_na_SINAN <- tabela_bonita( valores_na_SINAN, "Número de Na's na base SINAN")
+```
+
+`r valores_na_SINAN`
+
+```{r, include=FALSE}
+valores_na_SIM <- tabela_bonita( valores_na_SIM, "Número de Na's na base SIM")
+```
+
+`r valores_na_SIM`
+
+```{r, include=FALSE}
+valores_na_SESAP <- tabela_bonita( valores_na_SESAP, "Número de Na's na base SESAP")
+```
+
+`r valores_na_SESAP`
+
+```{r, include=FALSE}
+valores_na_SESAPOB <- tabela_bonita( valores_na_SESAPOB, "Número de Na's na base SESAP")
+```
+
+`r valores_na_SESAPOB`
+
+## Download CSV:
+
+```{r, include=FALSE}
+# Fazendo download das tabelas em CSV
+# Salvar os dataframes em arquivos CSV
+write.csv(valores_na_sih, "dados_sih.csv", row.names = FALSE)
+write.csv(valores_na_SINAN, "dados_sinan.csv", row.names = FALSE)
+write.csv(valores_na_SIM, "dados_sim.csv", row.names = FALSE)
+write.csv(valores_na_SESAP, "dados_sesap.csv", row.names = FALSE)
+```
+
+```{r}
+# Criar links para download
+cat('<a href="dados_sih.csv" download="dados_sih.csv">Clique aqui para baixar o arquivo 1</a><br>')
+cat('<a href="dados_sinan.csv" download="dados_sinan.csv">Clique aqui para baixar o arquivo 2</a><br>')
+cat('<a href="dados_sim.csv" download="dados_sim.csv">Clique aqui para baixar o arquivo 3</a><br>')
+cat('<a href="dados_sesap.csv" download="dados_sesap.csv">Clique aqui para baixar o arquivo 4</a><br>')
+
+```
